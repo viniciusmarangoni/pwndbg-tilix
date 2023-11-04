@@ -105,6 +105,20 @@ class TilixIntegration(gdb.Command):
         
         return ret_list
 
+    def on_process_attach(self, event):
+        gdb.events.stop.disconnect(self.on_process_attach)
+        pointer_size = gdb.parse_and_eval("sizeof(void *)")
+
+        if pointer_size and str(pointer_size).isdigit():
+            if int(str(pointer_size)) == 8:
+                self.examine_stack_command = 'x/40gx $sp'
+
+            elif int(str(pointer_size)) == 4:
+                self.examine_stack_command = 'x/80wx $sp'
+
+            contextwatch(self.examine_stack_command, "execute")
+
+
     def invoke(self, arg, from_tty):
         if arg.strip().lower() in ['help', '?', '/?', '-h', '--help']:
             self.show_help()
@@ -129,6 +143,8 @@ class TilixIntegration(gdb.Command):
 
         if self.already_running:
             return
+
+        gdb.events.stop.connect(self.on_process_attach)
 
         self.already_running = True
         top_right_pid, top_right_tty = self.add_new_panel_right()
@@ -160,10 +176,11 @@ class TilixIntegration(gdb.Command):
         
         contextoutput("legend", disas[1], True)
         contextoutput("stack", "/dev/null", True)
-        contextwatch("x/80wx $sp", "execute")
+        contextwatch(self.examine_stack_command, "execute")
         atexit.register(lambda: [os.popen('kill {0} 2>/dev/null'.format(p[0])).read() for p in self.panes.values() if self.already_running])
 
     def __init__(self):
+        self.examine_stack_command = 'x/80wx $sp'
         super(TilixIntegration, self).__init__("tilix-integration", gdb.COMMAND_USER)
 
 TilixIntegration()
